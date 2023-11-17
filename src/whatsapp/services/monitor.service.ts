@@ -79,11 +79,14 @@ export class WAMonitoringService {
   public delInstanceTime(instance: string) {
     const time = this.configService.get<DelInstance>('DEL_INSTANCE');
     if (typeof time === 'number' && time > 0) {
-      setTimeout(() => {
-        if (this.waInstances[instance]?.connectionStatus?.state !== 'open') {
-          delete this.waInstances[instance];
-        }
-      }, 1000 * 60 * time);
+      setTimeout(
+        () => {
+          if (this.waInstances[instance]?.connectionStatus?.state !== 'open') {
+            delete this.waInstances[instance];
+          }
+        },
+        1000 * 60 * time,
+      );
     }
   }
 
@@ -103,6 +106,7 @@ export class WAMonitoringService {
             owner: value.wuid,
             profileName: (await value.getProfileName()) || 'not loaded',
             profilePictureUrl: value.profilePictureUrl,
+            status: value.connectionStatus.state,
           },
           auth,
         });
@@ -113,38 +117,41 @@ export class WAMonitoringService {
   }
 
   private delInstanceFiles() {
-    setInterval(async () => {
-      if (this.db.ENABLED && this.db.SAVE_DATA.INSTANCE) {
-        const collections = await this.dbInstance.collections();
-        collections.forEach(async (collection) => {
-          const name = collection.namespace.replace(/^[\w-]+./, '');
-          await this.dbInstance.collection(name).deleteMany({
-            $or: [
-              { _id: { $regex: /^app.state.*/ } },
-              { _id: { $regex: /^session-.*/ } },
-            ] as any[],
+    setInterval(
+      async () => {
+        if (this.db.ENABLED && this.db.SAVE_DATA.INSTANCE) {
+          const collections = await this.dbInstance.collections();
+          collections.forEach(async (collection) => {
+            const name = collection.namespace.replace(/^[\w-]+./, '');
+            await this.dbInstance.collection(name).deleteMany({
+              $or: [
+                { _id: { $regex: /^app.state.*/ } },
+                { _id: { $regex: /^session-.*/ } },
+              ] as any[],
+            });
           });
-        });
-      } else if (this.redis.ENABLED) {
-      } else {
-        const dir = opendirSync(INSTANCE_DIR, { encoding: 'utf-8' });
-        for await (const dirent of dir) {
-          if (dirent.isDirectory()) {
-            const files = readdirSync(join(INSTANCE_DIR, dirent.name), {
-              encoding: 'utf-8',
-            });
-            files.forEach(async (file) => {
-              if (file.match(/^app.state.*/) || file.match(/^session-.*/)) {
-                rmSync(join(INSTANCE_DIR, dirent.name, file), {
-                  recursive: true,
-                  force: true,
-                });
-              }
-            });
+        } else if (this.redis.ENABLED) {
+        } else {
+          const dir = opendirSync(INSTANCE_DIR, { encoding: 'utf-8' });
+          for await (const dirent of dir) {
+            if (dirent.isDirectory()) {
+              const files = readdirSync(join(INSTANCE_DIR, dirent.name), {
+                encoding: 'utf-8',
+              });
+              files.forEach(async (file) => {
+                if (file.match(/^app.state.*/) || file.match(/^session-.*/)) {
+                  rmSync(join(INSTANCE_DIR, dirent.name, file), {
+                    recursive: true,
+                    force: true,
+                  });
+                }
+              });
+            }
           }
         }
-      }
-    }, 3600 * 1000 * 2);
+      },
+      3600 * 1000 * 2,
+    );
   }
 
   private async cleaningUp(instanceName: string) {

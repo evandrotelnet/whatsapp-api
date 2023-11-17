@@ -52,6 +52,46 @@ class Key {
   participant?: string;
 }
 
+// "instanceId" : ,
+//                 "messageId" : ,
+//                 "phone" :  ,
+//                 "moment" :  ,
+//                 "status" : "RECEIVED" ,
+//                 "chatName" : ,
+//                 "senderPhoto" : ,
+//                 "senderName" : ,
+//                 "participantPhone" : null ,
+//                 "photo" : ,
+//                 "broadcast" : false ,
+//                 "type" : "ReceivedCallback" ,
+//                 "text" : {
+//                     "message" : ,
+//                 }
+
+export class EditedMessageRaw {
+  constructor(props?: EditedMessageRaw) {
+    Object.assign(this, props);
+  }
+  instanceId?: string;
+  messageId?: string;
+  phone?: string;
+  moment?: number;
+  status?: string;
+  chatName?: string;
+  senderPhoto?: string;
+  senderName?: string;
+  participantPhone?: any;
+  photo?: string;
+  broadcast?: boolean;
+  type?: string;
+  text?: any;
+  image?: any;
+  document?: any;
+  video?: any;
+  forwarded?: any;
+  sticker?: any;
+}
+
 export class MessageRaw {
   constructor(props?: MessageRaw) {
     Object.assign(this, props);

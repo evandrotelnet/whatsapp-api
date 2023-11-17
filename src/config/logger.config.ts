@@ -38,6 +38,7 @@
 
 import { configService, Log } from './env.config';
 import dayjs from 'dayjs';
+// import instance
 
 const formatDateLog = (timestamp: number) =>
   dayjs(timestamp)
@@ -108,34 +109,13 @@ export class Logger {
 
     if (types.includes(type)) {
       if (configService.get<Log>('LOG').COLOR) {
-        console.log(
-          /*Command.UNDERSCORE +*/ Command.BRIGHT + Level[type],
-          '[CodeChat]',
-          Command.BRIGHT + Color[type],
-          process.pid.toString(),
-          Command.RESET,
-          Command.BRIGHT + Color[type],
-          '-',
-          Command.BRIGHT + Color.VERBOSE,
-          `${formatDateLog(Date.now())}  `,
-          Command.RESET,
-          Color[type] + Background[type] + Command.BRIGHT,
-          `${type} ` + Command.RESET,
-          Color.WARN + Command.BRIGHT,
-          `[${this.context}]` + Command.RESET,
-          Color[type] + Command.BRIGHT,
-          `[${typeValue}]` + Command.RESET,
-          Color[type],
-          typeValue !== 'object' ? value : '',
-          Command.RESET,
-        );
-        typeValue === 'object' ? console.log(/*Level.DARK,*/ value, '\n') : '';
+        console.log(typeValue !== 'object' ? value : '');
+        typeValue === 'object' ? console.log('value: ', value, '\n') : '';
       } else {
         console.log(
           '[CodeChat]',
           process.pid.toString(),
-          '-',
-          `${formatDateLog(Date.now())}  `,
+          `${formatDateLog(Date.now())} 42343432 `,
           `${type} `,
           `[${this.context}]`,
           `[${typeValue}]`,

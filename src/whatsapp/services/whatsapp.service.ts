@@ -36,7 +36,7 @@
  * │ who changed it and the date of modification.                                 │
  * └──────────────────────────────────────────────────────────────────────────────┘
  */
-
+import { writeFile } from 'fs';
 import makeWASocket, {
   AnyMessageContent,
   BufferedEventData,
@@ -77,7 +77,7 @@ import {
 } from '../../config/env.config';
 import { Logger } from '../../config/logger.config';
 import { INSTANCE_DIR, ROOT_DIR } from '../../config/path.config';
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, write } from 'fs';
 import { join } from 'path';
 import axios from 'axios';
 import { v4 } from 'uuid';
@@ -90,7 +90,7 @@ import { release } from 'os';
 import P from 'pino';
 import { execSync } from 'child_process';
 import { RepositoryBroker } from '../repository/repository.manager';
-import { MessageRaw, MessageUpdateRaw } from '../models/message.model';
+import { MessageRaw, MessageUpdateRaw, EditedMessageRaw } from '../models/message.model';
 import { ContactRaw } from '../models/contact.model';
 import { ChatRaw } from '../models/chat.model';
 import { getMIMEType } from 'node-mime-types';
@@ -137,6 +137,7 @@ import NodeCache from 'node-cache';
 import { useMultiFileAuthStateRedisDb } from '../../utils/use-multi-file-auth-state-redis-db';
 import { RedisCache } from '../../db/redis.client';
 import mime from 'mime-types';
+import crypto from 'crypto';
 
 export class WAStartupService {
   constructor(
@@ -233,7 +234,7 @@ export class WAStartupService {
     return await this.repository.webhook.find(this.instanceName);
   }
 
-  private async sendDataWebhook<T = any>(event: Events, data: T) {
+  private async sendDataWebhook<T = any>(event: Events, data: any) {
     const webhook = this.configService.get<Webhook>('WEBHOOK');
     const we = event.replace(/[\.-]/gm, '_').toUpperCase();
     if (webhook.EVENTS[we]) {
@@ -263,19 +264,49 @@ export class WAStartupService {
         });
       }
 
+      const reportMessage = {
+        instanceId: data?.instanceId || this.instance?.wuid,
+        messageId: data?.messageId,
+        phone: data?.phone,
+        moment: data?.moment,
+        status: data?.status,
+        chatName: data?.chatName,
+        senderPhoto: data?.senderPhoto,
+        senderName: data?.senderName,
+        participantPhone: data?.participantPhone,
+        photo: data?.photo,
+        broadcast: data?.broadcast,
+        type: data?.type,
+        text: data?.text,
+        image: data?.image,
+        document: data?.document,
+        video: data?.video,
+        sticker: data?.sticker,
+      };
+
       try {
         const globalWebhook = this.configService.get<Webhook>('WEBHOOK').GLOBAL;
         if (globalWebhook && globalWebhook?.ENABLED && isURL(globalWebhook.URL)) {
           const httpService = axios.create({ baseURL: globalWebhook.URL });
-          await httpService.post(
-            '',
-            {
-              event,
-              instance: this.instance.name,
-              data,
-            },
-            { headers: { 'x-owner': this.instance.wuid } },
-          );
+          if (event === Events.MESSAGES_UPSERT) {
+            await httpService.post(
+              '',
+              {
+                reportMessage,
+              },
+              { headers: { 'x-owner': this.instance.wuid } },
+            );
+          } else {
+            await httpService.post(
+              '',
+              {
+                event,
+                reportMessage,
+                data,
+              },
+              { headers: { 'x-owner': this.instance.wuid } },
+            );
+          }
         }
       } catch (error) {
         this.logger.error({
@@ -410,21 +441,24 @@ export class WAStartupService {
     const store = this.configService.get<StoreConf>('STORE');
     const database = this.configService.get<Database>('DATABASE');
     if (store?.CLEANING_INTERVAL && !database.ENABLED) {
-      setInterval(() => {
-        try {
-          for (const [key, value] of Object.entries(store)) {
-            if (value === true) {
-              execSync(
-                `rm -rf ${join(
-                  this.storePath,
-                  key.toLowerCase(),
-                  this.instance.wuid,
-                )}/*.json`,
-              );
+      setInterval(
+        () => {
+          try {
+            for (const [key, value] of Object.entries(store)) {
+              if (value === true) {
+                execSync(
+                  `rm -rf ${join(
+                    this.storePath,
+                    key.toLowerCase(),
+                    this.instance.wuid,
+                  )}/*.json`,
+                );
+              }
             }
-          }
-        } catch (error) {}
-      }, (store?.CLEANING_INTERVAL ?? 3600) * 1000);
+          } catch (error) {}
+        },
+        (store?.CLEANING_INTERVAL ?? 3600) * 1000,
+      );
     }
   }
 
@@ -609,7 +643,7 @@ export class WAStartupService {
         await this.repository.chat.insert(chatsRaw, database.SAVE_DATA.CHATS);
       }
 
-      const messagesRaw: MessageRaw[] = [];
+      const messagesRaw: EditedMessageRaw[] = [];
       const messagesRepository = await this.repository.message.find({
         where: { owner: this.instance.wuid },
       });
@@ -651,6 +685,23 @@ export class WAStartupService {
       messages = undefined;
     },
 
+    // reportMessage = {
+    //   "instanceId" : ,
+    //   "messageId" : ,
+    //   "phone" :  ,
+    //   "moment" :  ,
+    //   "status" : "RECEIVED" ,
+    //   "chatName" : ,
+    //   "senderPhoto" : ,
+    //   "senderName" : ,
+    //   "participantPhone" : null ,
+    //   "photo" : ,
+    //   "broadcast" : false ,
+    //   "type" : "ReceivedCallback" ,
+    //   "text" : {
+    //       "message" : ,
+    //   }
+
     'messages.upsert': async (
       {
         messages,
@@ -676,25 +727,236 @@ export class WAStartupService {
         if (Long.isLong(received.messageTimestamp)) {
           received.messageTimestamp = received.messageTimestamp?.toNumber();
         }
+        let editedText: any = null;
+        const m = received;
 
-        const messageRaw = new MessageRaw({
-          key: received.key,
-          pushName: received.pushName,
-          message: { ...received.message },
-          messageTimestamp: received.messageTimestamp as number,
-          owner: this.instance.wuid,
-          source: getDevice(received.key.id),
-        });
+        const senderPicture = (await this.profilePicture(received.key.remoteJid))
+          .profilePictureUrl;
+        const ownerPicture = (await this.profilePicture(this.instance.wuid))
+          .profilePictureUrl;
 
-        this.logger.log(received);
+        let editedMessageRaw: EditedMessageRaw;
+        // console.log(received);
 
-        await this.repository.message.insert(
-          [messageRaw],
-          database.SAVE_DATA.NEW_MESSAGE,
-        );
-        await this.sendDataWebhook(Events.MESSAGES_UPSERT, messageRaw);
+        //if message is an image
+        if (received.message?.imageMessage) {
+          const mediaMessage = await downloadMediaMessage(
+            m,
+            'buffer',
+            {},
+            {
+              logger: undefined,
+              reuploadRequest: this.client.updateMediaMessage,
+            },
+          );
+
+          //convert buffer to base64 string
+          const base64String = mediaMessage.toString('base64');
+
+          editedText = {
+            mimetype: received.message?.imageMessage?.mimetype,
+            imageURL: base64String,
+            thumbnailUrl: received.message?.imageMessage?.jpegThumbnail,
+            caption: received.message?.imageMessage?.caption,
+          };
+
+          editedMessageRaw = new EditedMessageRaw({
+            instanceId: this.instance.wuid,
+            messageId: received.key.id,
+            phone: received.key.remoteJid.replace(/@.+/, ''),
+            moment: received.messageTimestamp as number,
+            status: 'RECEIVED',
+            chatName: received.pushName,
+            senderPhoto: senderPicture,
+            senderName: received.pushName,
+            participantPhone: null,
+            photo: ownerPicture,
+            broadcast: false,
+            type: 'ReceivedCallback',
+            image: editedText,
+          });
+        }
+        // if message is a document
+        else if (received.message?.documentMessage) {
+          const mediaMessage = await downloadMediaMessage(
+            m,
+            'buffer',
+            {},
+            {
+              logger: undefined,
+              reuploadRequest: this.client.updateMediaMessage,
+            },
+          );
+
+          //convert buffer to base64 string
+          const base64String = mediaMessage.toString('base64');
+
+          editedText = {
+            documentUrl: base64String,
+            mimetype: received.message?.documentMessage?.mimetype,
+            title: received.message?.documentMessage?.caption,
+            fileName: received.message?.documentMessage?.fileName,
+          };
+          editedMessageRaw = new EditedMessageRaw({
+            instanceId: this.instance.wuid,
+            messageId: received.key.id,
+            phone: received.key.remoteJid.replace(/@.+/, ''),
+            moment: received.messageTimestamp as number,
+            status: 'RECEIVED',
+            chatName: received.pushName,
+            senderPhoto: senderPicture,
+            senderName: received.pushName,
+            participantPhone: null,
+            photo: ownerPicture,
+            broadcast: false,
+            type: 'ReceivedCallback',
+            document: editedText,
+          });
+        }
+        // if message is a video
+        else if (received.message?.videoMessage) {
+          const mediaMessage = await downloadMediaMessage(
+            m,
+            'buffer',
+            {},
+            {
+              logger: undefined,
+              reuploadRequest: this.client.updateMediaMessage,
+            },
+          );
+
+          //convert buffer to base64 string
+          const base64String = mediaMessage.toString('base64');
+
+          editedText = {
+            videoUrl: base64String,
+            mimetype: received.message?.videoMessage?.mimetype,
+            caption: received.message?.videoMessage?.caption,
+            thumbnailUrl: received.message?.videoMessage?.jpegThumbnail,
+            // fileName: received.message?.videoMessage?.fileName,
+          };
+          editedMessageRaw = new EditedMessageRaw({
+            instanceId: this.instance.wuid,
+            messageId: received.key.id,
+            phone: received.key.remoteJid.replace(/@.+/, ''),
+            moment: received.messageTimestamp as number,
+            status: 'RECEIVED',
+            chatName: received.pushName,
+            senderPhoto: senderPicture,
+            senderName: received.pushName,
+            participantPhone: null,
+            photo: ownerPicture,
+            broadcast: false,
+            type: 'ReceivedCallback',
+            video: editedText,
+          });
+        }
+        //if message is a sticker
+        else if (received.message?.stickerMessage) {
+          const mediaMessage = await downloadMediaMessage(
+            m,
+            'buffer',
+            {},
+            {
+              logger: undefined,
+              reuploadRequest: this.client.updateMediaMessage,
+            },
+          );
+
+          //convert buffer to base64 string
+          const base64String = mediaMessage.toString('base64');
+
+          editedText = {
+            mimetype: received.message?.stickerMessage?.mimetype,
+            imageURL: base64String,
+            image: null,
+            video: null,
+            document: null,
+            audio: null,
+          };
+
+          editedMessageRaw = new EditedMessageRaw({
+            instanceId: this.instance?.wuid,
+            messageId: received.key.id,
+            phone: received.key.remoteJid.replace(/@.+/, ''),
+            moment: received.messageTimestamp as number,
+            status: 'RECEIVED',
+            chatName: received.pushName,
+            senderPhoto: senderPicture,
+            senderName: received.pushName,
+            participantPhone: null,
+            photo: ownerPicture,
+            broadcast: false,
+            forwarded: false,
+            type: 'text',
+            sticker: editedText,
+          });
+        } else if (received.message?.extendedTextMessage) {
+          editedText = { message: received.message?.extendedTextMessage?.text };
+          editedMessageRaw = new EditedMessageRaw({
+            instanceId: this.instance.wuid,
+            messageId: received.key.id,
+            phone: received.key.remoteJid.replace(/@.+/, ''),
+            moment: received.messageTimestamp as number,
+            status: 'RECEIVED',
+            chatName: received.pushName,
+            senderPhoto: senderPicture,
+            senderName: received.pushName,
+            participantPhone: null,
+            photo: ownerPicture,
+            broadcast: false,
+            type: 'ReceivedCallback',
+            text: editedText,
+          });
+        }
+
+        await this.sendDataWebhook(Events.MESSAGES_UPSERT, editedMessageRaw);
       }
     },
+    // 'messages.upsert': async (
+    //   {
+    //     messages,
+    //     type,
+    //   }: {
+    //     messages: proto.IWebMessageInfo[];
+    //     type: MessageUpsertType;
+    //   },
+    //   database: Database,
+    // ) => {
+    //   for (const received of messages) {
+    //     if (
+    //       type !== 'notify' ||
+    //       !received?.message ||
+    //       received.message?.protocolMessage ||
+    //       received.message.senderKeyDistributionMessage
+    //     ) {
+    //       return;
+    //     }
+
+    //     this.client.sendPresenceUpdate('unavailable');
+
+    //     if (Long.isLong(received.messageTimestamp)) {
+    //       received.messageTimestamp = received.messageTimestamp?.toNumber();
+    //     }
+
+    //     const messageRaw = new MessageRaw({
+    //       key: received.key,
+    //       pushName: received.pushName,
+    //       message: { ...received.message },
+    //       messageTimestamp: received.messageTimestamp as number,
+    //       owner: this.instance.wuid,
+    //       source: getDevice(received.key.id),
+    //     });
+
+    //     this.logger.log(received);
+
+    //     await this.repository.message.insert(
+    //       [messageRaw],
+    //       database.SAVE_DATA.NEW_MESSAGE,
+    //     );
+    //     await this.sendDataWebhook(Events.MESSAGES_UPSERT, messageRaw);
+    //   }
+    // },
 
     'messages.update': async (args: WAMessageUpdate[], database: Database) => {
       const status: Record<number, wa.StatusMessage> = {
@@ -1418,4 +1680,7 @@ export class WAStartupService {
       throw new BadRequestException('Unable to leave the group', error.toString());
     }
   }
+}
+function saveFile(arg0: any, arg1: string) {
+  throw new Error('Function not implemented.');
 }

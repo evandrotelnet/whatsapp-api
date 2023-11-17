@@ -324,6 +324,7 @@ paths:
           description: Successful response
           content:
             application/json: {}
+  
   /message/sendMedia/{instanceName}:
     post:
       tags:
