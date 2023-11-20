@@ -137,7 +137,6 @@ import NodeCache from 'node-cache';
 import { useMultiFileAuthStateRedisDb } from '../../utils/use-multi-file-auth-state-redis-db';
 import { RedisCache } from '../../db/redis.client';
 import mime from 'mime-types';
-import crypto from 'crypto';
 
 export class WAStartupService {
   constructor(
@@ -178,6 +177,20 @@ export class WAStartupService {
 
   public get wuid() {
     return this.instance.wuid;
+  }
+
+  public async verifyIfNumberIsOnWhatsapp(phone: any) {
+    try {
+      const [result] = await this.client.onWhatsApp(phone.phone);
+
+      if (result.exists) {
+        return { exists: true, id: result.jid };
+      } else {
+        return { exists: false, id: result.jid };
+      }
+    } catch (error) {
+      return { exists: false, id: null };
+    }
   }
 
   public async getProfileName() {

@@ -96,6 +96,17 @@ export class InstanceController {
     }
   }
 
+  public async verifyNumber({ instanceName }: InstanceDto, data: any) {
+    const instance = this.waMonitor.waInstances[instanceName];
+    const state = instance?.connectionStatus?.state;
+    switch (state) {
+      case 'open':
+        return await instance.verifyIfNumberIsOnWhatsapp(data);
+      default:
+        return await this.connectionState({ instanceName });
+    }
+  }
+
   public async reloadConnection({ instanceName }: InstanceDto) {
     try {
       const instance = this.waMonitor.waInstances[instanceName];
