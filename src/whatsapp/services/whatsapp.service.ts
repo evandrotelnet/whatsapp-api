@@ -183,8 +183,9 @@ export class WAStartupService {
     try {
       const [result] = await this.client.onWhatsApp(phone.phone);
 
-      if (result.exists) {
-        return { exists: true, id: result.jid };
+      if (result !== undefined && result.exists) {
+        const number = result.jid.replace(/@.+/, '');
+        return { exists: true, phone: number };
       } else {
         return { exists: false, id: result.jid };
       }
@@ -295,6 +296,7 @@ export class WAStartupService {
         document: data?.document,
         video: data?.video,
         sticker: data?.sticker,
+        audio: data?.audio,
       };
 
       try {
@@ -749,7 +751,6 @@ export class WAStartupService {
           .profilePictureUrl;
 
         let editedMessageRaw: EditedMessageRaw;
-        // console.log(received);
 
         //if message is an image
         if (received.message?.imageMessage) {
@@ -903,6 +904,45 @@ export class WAStartupService {
             forwarded: false,
             type: 'text',
             sticker: editedText,
+          });
+        }
+        //if message is an audio
+        else if (received.message?.audioMessage) {
+          const mediaMessage = await downloadMediaMessage(
+            m,
+            'buffer',
+            {},
+            {
+              logger: undefined,
+              reuploadRequest: this.client.updateMediaMessage,
+            },
+          );
+
+          //convert buffer to base64 string
+          const base64String = mediaMessage.toString('base64');
+
+          editedText = {
+            mimetype: received.message?.audioMessage?.mimetype,
+            audioUrl: base64String,
+            audio: null,
+            video: null,
+            document: null,
+            image: null,
+          };
+          editedMessageRaw = new EditedMessageRaw({
+            instanceId: this.instance.wuid,
+            messageId: received.key.id,
+            phone: received.key.remoteJid.replace(/@.+/, ''),
+            moment: received.messageTimestamp as number,
+            status: 'RECEIVED',
+            chatName: received.pushName,
+            senderPhoto: senderPicture,
+            senderName: received.pushName,
+            participantPhone: null,
+            photo: ownerPicture,
+            broadcast: false,
+            type: 'ReceivedCallback',
+            audio: editedText,
           });
         } else if (received.message?.extendedTextMessage) {
           editedText = { message: received.message?.extendedTextMessage?.text };

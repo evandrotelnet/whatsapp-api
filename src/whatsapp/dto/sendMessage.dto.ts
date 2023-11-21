@@ -80,7 +80,7 @@ export class MediaFileDto extends Metadata {
 }
 
 class Audio {
-  audio: string;
+  audio: any;
 }
 export class SendAudioDto extends Metadata {
   audioMessage: Audio;

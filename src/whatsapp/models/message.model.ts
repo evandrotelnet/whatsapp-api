@@ -90,6 +90,7 @@ export class EditedMessageRaw {
   video?: any;
   forwarded?: any;
   sticker?: any;
+  audio?: any;
 }
 
 export class MessageRaw {

@@ -58,7 +58,12 @@ export class SendMessageController {
 
   public async sendMedia({ instanceName }: InstanceDto, data: SendMediaDto) {
     if (isBase64(data?.mediaMessage?.media)) {
-      throw new BadRequestException('Owned media must be a url');
+      const base64 = data?.mediaMessage?.media as string;
+      //convert base64 to buffer
+      const buffer = Buffer.from(base64, 'base64');
+
+      const data2 = { ...data, mediaMessage: { ...data.mediaMessage, media: buffer } };
+      return await this.waMonitor.waInstances[instanceName].mediaMessage(data2);
     }
     if (data?.mediaMessage.mediatype === 'document' && !data?.mediaMessage?.fileName) {
       throw new BadRequestException('Enter the file name for the "document" type.');
@@ -83,7 +88,12 @@ export class SendMessageController {
 
   public async sendWhatsAppAudio({ instanceName }: InstanceDto, data: SendAudioDto) {
     if (isBase64(data?.audioMessage.audio)) {
-      throw new BadRequestException('Owned media must be a url');
+      const base64 = data?.audioMessage?.audio as string;
+      //convert base64 to buffer
+      const buffer = Buffer.from(base64, 'base64');
+
+      const data2 = { ...data, audioMessage: { ...data.audioMessage, audio: buffer } };
+      return await this.waMonitor.waInstances[instanceName].audioWhatsapp(data2);
     }
     if (isURL(data.audioMessage.audio) || isBase64(data.audioMessage.audio)) {
       return await this.waMonitor.waInstances[instanceName].audioWhatsapp(data);
