@@ -27,13 +27,7 @@
    <div id="root" class="container mt-5 mb-5 w-50">
 
       <div id="display-qrcode">
-         <h2 class="mb-3 text-secondary">Connect to whatsapp</h2>
-         <div class="input-group mb-3">
-            <input id="input-session" type="text" class="form-control" aria-describedby="btn-qr-g" disabled
-               value="{{instanceName}}">
-            <button id="gen-qrcode" class="btn btn-success" type="submit">Generate qrcode</button>
-         </div>
-         <div id="qrcode-img"></div>
+        <image src="/images/loading.gif" alt="loading" width="100px" height="100px">
       </div>
 
       <hr>
@@ -44,11 +38,7 @@
       integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
    <script type="module">
 
-      const log = (...data) => console.log(data);
-
-      $('#gen-qrcode').click(() => {
-
-         const headers = '{{type}}' === 'apikey'
+      const headers = '{{type}}' === 'apikey'
             ? { apikey: '{{auth.apikey}}' }
             : { authorization: 'Bearer {{auth.jwt}}' };
 
@@ -75,8 +65,6 @@
             },
             error: (error) => console.log(error),
          });
-
-      });
    </script>
 </body>
 

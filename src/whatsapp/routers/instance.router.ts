@@ -71,6 +71,17 @@ export class InstanceRouter extends RouterBroker {
 
         return res.status(HttpStatus.OK).json(response);
       })
+      .get(this.routerPath('getQrCode'), ...guards, async (req, res) => {
+        const response = await this.dataValidate<InstanceDto>({
+          request: req,
+          schema: instanceNameSchema,
+          ClassRef: InstanceDto,
+          execute: (instance) => instanceController.getQrCodeFromStore(instance),
+        });
+
+        return res.status(HttpStatus.OK).json(response);
+      }
+      )
       .get(this.routerPath('connectionState'), ...guards, async (req, res) => {
         const response = await this.dataValidate<InstanceDto>({
           request: req,

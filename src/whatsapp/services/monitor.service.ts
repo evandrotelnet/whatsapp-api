@@ -96,24 +96,48 @@ export class WAMonitoringService {
     }
 
     const instances: any[] = [];
+    console.log('INSTANCIAS PORRAAA\n\n\n', this.waInstances, '\n\n\n')
+    //transform waInstances into an object
+   const object = Object.entries(this.waInstances);
+    // console.log('object', object[0][1].instanceInfo);
 
-    for await (const [key, value] of Object.entries(this.waInstances)) {
-      if (value && value.connectionStatus.state === 'open') {
-        const auth = await this.repository.auth.find(key);
+try
+   { for await (const value of object) {
+      if (value) {
         instances.push({
           instance: {
-            instanceName: key,
-            owner: value.wuid,
-            profileName: (await value.getProfileName()) || 'not loaded',
-            profilePictureUrl: value.profilePictureUrl,
-            status: value.connectionStatus.state,
+            instanceName: value[0],
+            owner: value[1].wuid? value[1].wuid : 'not loaded',
+            // profileName: value[1]. || 'not loaded',
+            profilePictureUrl: value[1].profilePictureUrl? value[1].profilePictureUrl : 'not loaded',
+            status: value[1].connectionStatus.state
           },
-          auth,
+
         });
       }
     }
-
     return instances;
+  }
+  //  { for await (const [key, value] of Object.entries(this.waInstances)) {
+  //     if (value) {
+  //       const auth = await this.repository.auth.find(key);
+  //       instances.push({
+  //         instance: {
+  //           instanceName: key,
+  //           owner: value.wuid,
+  //           profileName: (await value.getProfileName()) || 'not loaded',
+  //           profilePictureUrl: value.profilePictureUrl,
+  //           status: value.connectionStatus.state,
+  //         },
+  //         auth,
+  //       });
+  //     }
+  //   }
+  //   return instances;
+  // }
+    catch  {
+
+    }
   }
 
   private delInstanceFiles() {

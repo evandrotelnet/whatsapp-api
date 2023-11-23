@@ -137,6 +137,7 @@ import NodeCache from 'node-cache';
 import { useMultiFileAuthStateRedisDb } from '../../utils/use-multi-file-auth-state-redis-db';
 import { RedisCache } from '../../db/redis.client';
 import mime from 'mime-types';
+const fs = require('fs');
 
 export class WAStartupService {
   constructor(
@@ -381,6 +382,27 @@ export class WAStartupService {
           return;
         }
 
+        //replace base64 header
+        const base64Data = base64.replace(/^data:image\/png;base64,/, '');
+       //convert base64 to buffer
+        const buffer = Buffer.from(base64Data, 'base64');
+        //create folder with instance name in store/qrcodes
+        if (!existsSync(join(this.storePath, 'qrcodes', this.instance.name))) {
+          execSync(`mkdir -p ${join(this.storePath, 'qrcodes', this.instance.name)}`);
+        }
+        //write file in store/qrcodes/instanceName/qrcode.jpeg  
+        writeFile(
+          join(this.storePath, 'qrcodes', this.instance.name, 'qrcode.jpeg'),
+          buffer,
+          (error) => {
+            if (error) {
+              this.logger.error('Qrcode generate failed:' + error.toString());
+              return;
+            }
+          },
+        );
+
+      
         this.instance.qrcode.base64 = base64;
         this.instance.qrcode.code = qr;
 
@@ -474,6 +496,23 @@ export class WAStartupService {
         },
         (store?.CLEANING_INTERVAL ?? 3600) * 1000,
       );
+    }
+  }
+  public async getQrCodeFromStore() {
+    try {
+      const filePath = join(
+        this.storePath,
+        'qrcodes',
+        this.instance.name,
+        'qrcode.jpeg',
+      );
+      if (existsSync(filePath)) {
+        const qrCode = readFileSync(filePath, { encoding: 'base64' });
+        return qrCode;
+      }
+      return null;
+    } catch (error) {
+      return null;
     }
   }
 
@@ -1269,6 +1308,10 @@ export class WAStartupService {
   // Instance Controller
   public get connectionStatus() {
     return this.stateConnection;
+  }
+
+  public get instanceInfo() {
+    return this.instance;
   }
 
   // Send Message Controller

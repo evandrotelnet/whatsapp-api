@@ -125,6 +125,28 @@ export class InstanceController {
     }
   }
 
+  public async getQrCodeFromStore({ instanceName }: InstanceDto) {
+    try {
+      const instance = this.waMonitor.waInstances[instanceName];
+      const state = instance?.connectionStatus?.state;
+      let qrcode;
+      switch (state) {
+        case 'open':
+          // get qrcode from store
+          qrcode = await instance.getQrCodeFromStore();
+          return qrcode;
+        case 'connecting':
+          qrcode = await instance.getQrCodeFromStore();
+          return qrcode;
+        default:
+          return await this.connectionState({ instanceName });
+      }
+    } catch (error) {
+      this.logger.error(error);
+    }
+  }
+
+
   public async connectToWhatsapp({ instanceName }: InstanceDto) {
     try {
       const instance = this.waMonitor.waInstances[instanceName];
@@ -134,6 +156,7 @@ export class InstanceController {
         case 'close':
           await instance.connectToWhatsapp();
           await delay(2000);
+          console.log('qrcode', instance.qrCode);
           return instance.qrCode;
         case 'connecting':
           return instance.qrCode;
